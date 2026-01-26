@@ -15,7 +15,7 @@ export interface AuthResponse {
 }
 
 export interface Patient {
-  id: number;
+  id: string | number;
   name: string;
   dateOfBirth: string;
   phone: string;
@@ -27,8 +27,8 @@ export interface Patient {
 }
 
 export interface Appointment {
-  id: number;
-  patientId: number;
+  id: string | number;
+  patientId: string | number;
   patientName: string;
   date: string;
   time: string;
@@ -39,7 +39,7 @@ export interface Appointment {
 }
 
 export interface InventoryItem {
-  id: number;
+  id: string | number;
   name: string;
   category: string;
   quantity: number;
@@ -50,8 +50,8 @@ export interface InventoryItem {
 }
 
 export interface Referral {
-  id: number;
-  patientId: number;
+  id: string | number;
+  patientId: string | number;
   patientName: string;
   referringDentist: string;
   referredTo: string;
@@ -59,6 +59,43 @@ export interface Referral {
   reason: string;
   date: string;
   urgency: 'routine' | 'urgent' | 'emergency';
+}
+
+export interface Announcement {
+  id: string | number;
+  title: string;
+  message: string;
+  type: 'promo' | 'closure' | 'general' | 'important';
+  date: string;
+  createdBy: string;
+}
+
+export interface TreatmentRecord {
+  id: string | number;
+  patientId: string | number;
+  date: string;
+  description: string;
+  treatment?: string;
+  tooth?: string;
+  notes?: string;
+  cost: number;
+  dentist?: string;
+  paymentType?: 'full' | 'installment';
+  amountPaid?: number;
+  remainingBalance?: number;
+  installmentPlan?: any;
+}
+
+export interface Payment {
+  id: string | number;
+  patientId: string | number;
+  treatmentRecordId?: string | number;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  status: string;
+  notes?: string;
+  recordedBy: string;
 }
 
 export const setAuthToken: (token: string) => void;
@@ -70,38 +107,58 @@ export const authAPI: {
 };
 
 export const patientAPI: {
-  getAll: () => Promise<Patient[]>;
-  getById: (id: number) => Promise<Patient>;
-  create: (data: any) => Promise<Patient>;
-  update: (id: number, data: any) => Promise<Patient>;
-  delete: (id: number) => Promise<any>;
+  getAll: () => Promise<any[]>;
+  getById: (id: string | number) => Promise<any>;
+  create: (data: any) => Promise<any>;
+  update: (id: string | number, data: any) => Promise<any>;
+  delete: (id: string | number) => Promise<any>;
 };
 
 export const appointmentAPI: {
-  getAll: () => Promise<Appointment[]>;
-  create: (data: any) => Promise<Appointment>;
-  update: (id: number, data: any) => Promise<Appointment>;
-  delete: (id: number) => Promise<any>;
+  getAll: () => Promise<any[]>;
+  create: (data: any) => Promise<any>;
+  update: (id: string | number, data: any) => Promise<any>;
+  delete: (id: string | number) => Promise<any>;
 };
 
 export const inventoryAPI: {
-  getAll: () => Promise<InventoryItem[]>;
-  create: (data: any) => Promise<InventoryItem>;
-  update: (id: number, data: any) => Promise<InventoryItem>;
-  delete: (id: number) => Promise<any>;
+  getAll: () => Promise<any[]>;
+  create: (data: any) => Promise<any>;
+  update: (id: string | number, data: any) => Promise<any>;
+  delete: (id: string | number) => Promise<any>;
 };
 
 export const referralAPI: {
-  getAll: () => Promise<Referral[]>;
-  create: (data: any) => Promise<Referral>;
-  update: (id: number, data: any) => Promise<Referral>;
-  delete: (id: number) => Promise<any>;
+  getAll: () => Promise<any[]>;
+  create: (data: any) => Promise<any>;
+  update: (id: string | number, data: any) => Promise<any>;
+  delete: (id: string | number) => Promise<any>;
+};
+
+export const announcementAPI: {
+  getAll: () => Promise<any[]>;
+  create: (data: any) => Promise<any>;
+  delete: (id: string | number) => Promise<any>;
+};
+
+export const treatmentRecordAPI: {
+  getAll: () => Promise<any[]>;
+  getByPatientId: (patientId: string | number) => Promise<any[]>;
+  create: (data: any) => Promise<any>;
+  update: (id: string | number, data: any) => Promise<any>;
+  delete: (id: string | number) => Promise<any>;
+};
+
+export const paymentAPI: {
+  getAll: () => Promise<any[]>;
+  create: (data: any) => Promise<any>;
+  delete: (id: string | number) => Promise<any>;
 };
 
 export const patientClaimingAPI: {
   searchRecords: (data: { fullName: string; dateOfBirth: string; phone: string }) => Promise<any>;
-  selectPatient: (data: { patientId: number; lastVisit?: string }) => Promise<any>;
-  sendOTP: (patientId: number) => Promise<any>;
-  resendOTP: (patientId: number) => Promise<any>;
-  verifyAndLink: (data: { patientId: number; otp: string; userData: any }) => Promise<any>;
+  selectPatient: (data: { patientId: string | number; lastVisit?: string }) => Promise<any>;
+  sendOTP: (patientId: string | number) => Promise<any>;
+  resendOTP: (patientId: string | number) => Promise<any>;
+  verifyAndLink: (data: { patientId: string | number; otp: string; userData: any }) => Promise<any>;
 };

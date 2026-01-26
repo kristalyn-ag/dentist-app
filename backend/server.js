@@ -8,6 +8,8 @@ const appointmentsRoutes = require('./routes/appointments');
 const inventoryRoutes = require('./routes/inventory');
 const referralsRoutes = require('./routes/referrals');
 const employeesRoutes = require('./routes/employees');
+const treatmentRecordsRoutes = require('./routes/treatmentRecords');
+const paymentsRoutes = require('./routes/payments');
 const patientClaimingRoutes = require('./routes/patient-claiming');
 const announcementsRoutes = require('./routes/announcements');
 
@@ -29,6 +31,8 @@ app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/referrals', referralsRoutes);
 app.use('/api/employees', employeesRoutes);
+app.use('/api/treatment-records', treatmentRecordsRoutes);
+app.use('/api/payments', paymentsRoutes);
 app.use('/api/patient-claiming', patientClaimingRoutes);
 app.use('/api/announcements', announcementsRoutes);
 

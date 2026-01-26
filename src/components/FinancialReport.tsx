@@ -34,12 +34,12 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
   // Calculate patient balances from actual treatment records with payment data
   const patientBalances: PatientBalance[] = patients.map(patient => {
     const patientRecords = treatmentRecords.filter(r => r.patientId === patient.id);
-    const totalBilled = patientRecords.reduce((sum, r) => sum + r.cost, 0);
+    const totalBilled = patientRecords.reduce((sum, r) => sum + Number(r.cost || 0), 0);
     
     // Use actual payment data from treatment records
     const totalPaid = patientRecords.reduce((sum, r) => {
       if (r.amountPaid !== undefined) {
-        return sum + r.amountPaid;
+        return sum + Number(r.amountPaid || 0);
       }
       return sum;
     }, 0);
@@ -47,7 +47,7 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
     const balance = totalBilled - totalPaid;
 
     return {
-      patientId: patient.id,
+      patientId: String(patient.id),
       patientName: patient.name,
       totalBilled,
       totalPaid,
@@ -61,15 +61,15 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
     return recordMonth === selectedMonth;
   });
 
-  const monthlyRevenue = monthlyRecords.reduce((sum, record) => sum + record.cost, 0);
+  const monthlyRevenue = monthlyRecords.reduce((sum, record) => sum + Number(record.cost || 0), 0);
   const monthlyTransactions = monthlyRecords.length;
 
   // Calculate total outstanding balance
-  const totalOutstanding = patientBalances.reduce((sum, pb) => sum + pb.balance, 0);
+  const totalOutstanding = patientBalances.reduce((sum, pb) => sum + Number(pb.balance || 0), 0);
 
-  // Calculate total revenue
-  const totalRevenue = treatmentRecords.reduce((sum, record) => sum + record.cost, 0);
-  const totalPaid = patientBalances.reduce((sum, pb) => sum + pb.totalPaid, 0);
+  // Calculate totals
+  const totalBilled = treatmentRecords.reduce((sum, record) => sum + Number(record.cost || 0), 0);
+  const totalRevenue = patientBalances.reduce((sum, pb) => sum + Number(pb.totalPaid || 0), 0);
 
   // Treatment type breakdown
   const treatmentBreakdown = treatmentRecords.reduce((acc, record) => {
@@ -78,7 +78,7 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
       acc[type] = { count: 0, revenue: 0 };
     }
     acc[type].count++;
-    acc[type].revenue += record.cost;
+    acc[type].revenue += Number(record.cost || 0);
     return acc;
   }, {} as { [key: string]: { count: number; revenue: number } });
 
@@ -87,7 +87,7 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
       generatedDate: new Date().toISOString(),
       summary: {
         totalRevenue,
-        totalPaid,
+        totalBilled,
         totalOutstanding,
         monthlyRevenue,
         monthlyTransactions
@@ -120,7 +120,7 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
       return;
     }
 
-    const paidAmount = parseInt(paymentAmount) || 0;
+    const paidAmount = parseFloat(paymentAmount) || 0;
     if (paidAmount <= 0) {
       alert('Payment amount must be greater than 0');
       return;
@@ -254,7 +254,7 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
                 </div>
                 <div className="flex items-center gap-1 text-sm text-green-600 mt-2">
                   <TrendingUp className="w-4 h-4" />
-                  <span>All time</span>
+                  <span>All time (Paid)</span>
                 </div>
               </motion.div>
 
@@ -269,12 +269,12 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
                     <PesoSign className="w-6 h-6 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Total Collected</p>
-                    <p className="text-2xl">₱{totalPaid.toLocaleString('en-US')}</p>
+                    <p className="text-sm text-gray-600">Total Billed</p>
+                    <p className="text-2xl">₱{totalBilled.toLocaleString('en-US')}</p>
                   </div>
                 </div>
                 <p className="text-sm text-gray-600 mt-2">
-                  {((totalPaid / totalRevenue) * 100).toFixed(1)}% collection rate
+                  {((totalRevenue / totalBilled) * 100).toFixed(1)}% collection rate
                 </p>
               </motion.div>
 
@@ -339,7 +339,7 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
                 {Object.entries(treatmentBreakdown)
                   .sort(([, a], [, b]) => b.revenue - a.revenue)
                   .map(([treatment, data]) => {
-                    const percentage = (data.revenue / totalRevenue) * 100;
+                    const percentage = totalBilled > 0 ? (data.revenue / totalBilled) * 100 : 0;
                     return (
                       <div key={treatment} className="p-4 bg-gray-50 rounded-lg">
                         <div className="flex justify-between items-center mb-2">
@@ -524,10 +524,10 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
                     >
                       <option value="">-- Select a procedure --</option>
                       {selectedPatientId && treatmentRecords
-                        .filter(t => String(t.patientId) === selectedPatientId && (t.remainingBalance || 0) > 0)
+                        .filter(t => String(t.patientId) === selectedPatientId && (t.remainingBalance !== undefined ? Number(t.remainingBalance) > 0 : Number(t.cost || 0) > 0))
                         .map(treatment => (
                           <option key={treatment.id} value={treatment.id}>
-                            {treatment.treatment} - Balance: ₱{treatment.remainingBalance || treatment.cost}
+                            {treatment.treatment} - Balance: ₱{(treatment.remainingBalance !== undefined ? Number(treatment.remainingBalance) : Number(treatment.cost || 0)).toLocaleString()}
                           </option>
                         ))}
                     </select>
@@ -539,7 +539,7 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
                     return selected ? (
                       <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
                         <p className="text-sm text-gray-600">Remaining Balance</p>
-                        <p className="text-2xl font-bold text-blue-600">₱{selected.remainingBalance || selected.cost}</p>
+                        <p className="text-2xl font-bold text-blue-600">₱{(selected.remainingBalance !== undefined ? Number(selected.remainingBalance) : Number(selected.cost || 0)).toLocaleString()}</p>
                       </div>
                     ) : null;
                   })()}
@@ -604,7 +604,7 @@ export function FinancialReport({ patients, treatmentRecords, setTreatmentRecord
                 <h2 className="text-xl font-bold mb-6">Recent Payments</h2>
                 <div className="space-y-3">
                   {payments.slice(-10).reverse().map(payment => {
-                    const patient = patients.find(p => p.id.toString() === payment.patientId);
+                    const patient = patients.find(p => String(p.id) === String(payment.patientId));
                     return (
                       <div key={payment.id} className="p-4 bg-gray-50 rounded-lg border-l-4 border-emerald-500">
                         <div className="flex justify-between items-start">

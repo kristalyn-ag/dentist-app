@@ -132,6 +132,40 @@ export const announcementAPI = {
     }),
 };
 
+// Treatment Record APIs
+export const treatmentRecordAPI = {
+  getAll: () => fetchWithAuth(`${API_BASE}/treatment-records`),
+  getByPatientId: (patientId) => fetchWithAuth(`${API_BASE}/treatment-records/patient/${patientId}`),
+  create: (data) =>
+    fetchWithAuth(`${API_BASE}/treatment-records`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id, data) =>
+    fetchWithAuth(`${API_BASE}/treatment-records/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    fetchWithAuth(`${API_BASE}/treatment-records/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Payment APIs
+export const paymentAPI = {
+  getAll: () => fetchWithAuth(`${API_BASE}/payments`),
+  create: (data) =>
+    fetchWithAuth(`${API_BASE}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    fetchWithAuth(`${API_BASE}/payments/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
 // Patient Claiming APIs
 export const patientClaimingAPI = {
   // Search for existing patient records

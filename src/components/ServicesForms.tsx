@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Patient, TreatmentRecord } from '../App';
 import { FileText, Printer, Download, Plus, X, CreditCard } from 'lucide-react';
+import { treatmentRecordAPI, paymentAPI } from '../api';
+import { toast } from 'sonner';
 
 type ServicesFormsProps = {
   patients: Patient[];
@@ -12,6 +14,7 @@ type ServicesFormsProps = {
     appointmentType: string;
   };
   onServiceCreated?: (patientId: string, service: TreatmentRecord) => void;
+  onDataChanged?: () => Promise<void>;
 };
 
 type ServiceType = 'Extraction' | 'Pasta' | 'Braces' | 'Cleaning' | 'Pustiso/Dentures';
@@ -31,7 +34,7 @@ type Prescription = {
   notes: string;
 };
 
-export function ServicesForms({ patients, treatmentRecords, setTreatmentRecords, prefilledAppointment, onServiceCreated }: ServicesFormsProps) {
+export function ServicesForms({ patients, treatmentRecords, setTreatmentRecords, prefilledAppointment, onServiceCreated, onDataChanged }: ServicesFormsProps) {
   const [activeForm, setActiveForm] = useState<'service' | 'prescription' | 'receipt' | null>(prefilledAppointment ? 'service' : null);
   const [selectedService, setSelectedService] = useState<ServiceType>(() => {
     // Try to match appointment type to service type
@@ -54,62 +57,96 @@ export function ServicesForms({ patients, treatmentRecords, setTreatmentRecords,
   const [paymentType, setPaymentType] = useState<'full' | 'installment'>('full');
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [numberOfInstallments, setNumberOfInstallments] = useState<number>(3);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const services: ServiceType[] = ['Extraction', 'Pasta', 'Braces', 'Cleaning', 'Pustiso/Dentures'];
 
-  const handleCreateService = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCreateService = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const patientId = formData.get('patientId') as string;
-    const totalCost = parseInt(formData.get('cost') as string) || 0;
-    const paid = parseInt(formData.get('amountPaid') as string) || 0;
-    const type = (formData.get('paymentType') as 'full' | 'installment') || 'full';
+    setIsSubmitting(true);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const patientId = formData.get('patientId') as string;
+      const totalCost = parseFloat(formData.get('cost') as string) || 0;
+      const paid = parseFloat(formData.get('amountPaid') as string) || 0;
+      const type = (formData.get('paymentType') as 'full' | 'installment') || 'full';
+      const date = formData.get('date') as string;
+      const service = formData.get('service') as string;
+      const dentist = formData.get('dentist') as string;
 
-    let installmentPlan;
-    if (type === 'installment') {
-      const numInstallments = parseInt(formData.get('numberOfInstallments') as string) || 3;
-      const amountPerInstallment = totalCost / numInstallments;
-      installmentPlan = {
-        installments: numInstallments,
-        amountPerInstallment,
-        installmentsDue: Array.from({ length: numInstallments }, (_, i) => ({
-          dueDate: new Date(Date.now() + (i + 1) * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          amount: amountPerInstallment,
-          paid: i === 0 && paid > 0,
-        })),
+      let installmentPlan;
+      if (type === 'installment') {
+        const numInstallments = parseInt(formData.get('numberOfInstallments') as string) || 3;
+        const amountPerInstallment = totalCost / numInstallments;
+        installmentPlan = {
+          installments: numInstallments,
+          amountPerInstallment,
+          installmentsDue: Array.from({ length: numInstallments }, (_, i) => ({
+            dueDate: new Date(Date.now() + (i + 1) * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            amount: amountPerInstallment,
+            paid: i === 0 && paid > 0,
+          })),
+        };
+      }
+
+      const newRecordData = {
+        patientId,
+        date,
+        description: service,
+        treatment: service,
+        tooth: formData.get('tooth') as string || undefined,
+        notes: formData.get('notes') as string,
+        cost: totalCost,
+        dentist,
+        paymentType: type,
+        amountPaid: paid,
+        remainingBalance: totalCost - paid,
+        installmentPlan,
       };
-    }
 
-    const newRecord: TreatmentRecord = {
-      id: Date.now().toString(),
-      patientId,
-      date: formData.get('date') as string,
-      description: formData.get('service') as string,
-      treatment: formData.get('service') as string,
-      tooth: formData.get('tooth') as string || undefined,
-      notes: formData.get('notes') as string,
-      cost: totalCost,
-      dentist: formData.get('dentist') as string,
-      paymentType: type,
-      amountPaid: paid,
-      remainingBalance: totalCost - paid,
-      installmentPlan,
-    };
+      // Save to backend
+      const savedRecord = await treatmentRecordAPI.create(newRecordData);
+      
+      // Also create a payment record if there's an initial payment
+      if (paid > 0) {
+        await paymentAPI.create({
+          patientId,
+          treatmentRecordId: savedRecord.id,
+          amount: paid,
+          paymentDate: date,
+          paymentMethod: 'cash', // Default to cash for now
+          status: 'paid',
+          notes: `Initial payment for ${service}`,
+          recordedBy: dentist
+        });
+      }
 
-    setTreatmentRecords([...treatmentRecords, newRecord]);
-    setLastCreatedService(newRecord);
-    setActiveForm(null);
-    setPaymentType('full');
-    setAmountPaid(0);
-    setNumberOfInstallments(3);
-    setSelectedPatient('');
-    
-    // Show prescription prompt instead of auto-opening
-    setShowPrescriptionPrompt(true);
-    
-    // Call callback if provided
-    if (onServiceCreated) {
-      onServiceCreated(patientId, newRecord);
+      setLastCreatedService(savedRecord);
+      setActiveForm(null);
+      setPaymentType('full');
+      setAmountPaid(0);
+      setNumberOfInstallments(3);
+      setSelectedPatient('');
+      
+      toast.success('Service record saved successfully');
+      
+      // Refresh all data to update balances
+      if (onDataChanged) {
+        await onDataChanged();
+      }
+      
+      // Show prescription prompt
+      setShowPrescriptionPrompt(true);
+      
+      // Call callback if provided
+      if (onServiceCreated) {
+        onServiceCreated(patientId, savedRecord);
+      }
+    } catch (error) {
+      console.error('Failed to save service:', error);
+      toast.error('Failed to save service record');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -117,7 +154,7 @@ export function ServicesForms({ patients, treatmentRecords, setTreatmentRecords,
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const patientId = formData.get('patientId') as string;
-    const patient = patients.find(p => p.id === patientId);
+    const patient = patients.find(p => String(p.id) === String(patientId));
 
     const medications = [];
     let index = 0;
@@ -147,7 +184,7 @@ export function ServicesForms({ patients, treatmentRecords, setTreatmentRecords,
   };
 
   const printPrescription = (prescription: Prescription) => {
-    const patient = patients.find(p => p.id === prescription.patientId);
+    const patient = patients.find(p => String(p.id) === String(prescription.patientId));
     
     const content = `
 ═══════════════════════════════════════════════════
@@ -320,7 +357,7 @@ Payment Type: ${record.paymentType === 'full' ? 'Full Payment' : 'Installment Pl
         <h2 className="mb-4">Recent Services</h2>
         <div className="space-y-3">
           {treatmentRecords.slice(-5).reverse().map((record) => {
-            const patient = patients.find(p => p.id === record.patientId);
+            const patient = patients.find(p => String(p.id) === String(record.patientId));
             return (
               <div key={record.id} className="p-4 border border-gray-200 rounded hover:bg-gray-50">
                 <div className="flex justify-between items-start">
@@ -895,7 +932,7 @@ Payment Type: ${record.paymentType === 'full' ? 'Full Payment' : 'Installment Pl
                   </div>
                   <div className="flex justify-between border-t-2 border-gray-300 pt-2 font-semibold">
                     <span>Current Balance:</span>
-                    <span className={viewingReceipt.remainingBalance > 0 ? 'text-red-600' : 'text-green-600'}>₱{viewingReceipt.remainingBalance || viewingReceipt.cost}</span>
+                    <span className={(viewingReceipt.remainingBalance !== undefined ? Number(viewingReceipt.remainingBalance) : Number(viewingReceipt.cost || 0)) > 0 ? 'text-red-600' : 'text-green-600'}>₱{(viewingReceipt.remainingBalance !== undefined ? Number(viewingReceipt.remainingBalance) : Number(viewingReceipt.cost || 0)).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -948,7 +985,7 @@ Payment Type: ${record.paymentType === 'full' ? 'Full Payment' : 'Installment Pl
           <div className="bg-white rounded-lg p-8 max-w-md w-full shadow-2xl">
             <h2 className="text-2xl font-bold mb-4">Prescription Required?</h2>
             <p className="text-gray-700 mb-6">
-              Do you need to make a prescription for {patients.find(p => p.id === lastCreatedService.patientId)?.name || 'this patient'}?
+              Do you need to make a prescription for {patients.find(p => String(p.id) === String(lastCreatedService.patientId))?.name || 'this patient'}?
             </p>
             <div className="flex gap-4 justify-end">
               <button

@@ -23,6 +23,7 @@ export type Patient = {
   allergies: string;
   lastVisit?: string;
   nextAppointment?: string;
+  totalBalance?: number;
 };
 
 export type Appointment = {
@@ -50,8 +51,8 @@ export type InventoryItem = {
 };
 
 export type TreatmentRecord = {
-  id: string;
-  patientId: string;
+  id: string | number;
+  patientId: string | number;
   date: string;
   description: string;
   type?: string;
@@ -71,9 +72,9 @@ export type TreatmentRecord = {
 };
 
 export type Payment = {
-  id: string;
-  patientId: string;
-  treatmentRecordId?: string;
+  id: string | number;
+  patientId: string | number;
+  treatmentRecordId?: string | number;
   amount: number;
   paymentDate: string;
   paymentMethod: 'cash' | 'card' | 'check' | 'bank_transfer';
@@ -83,8 +84,8 @@ export type Payment = {
 };
 
 export type Referral = {
-  id: string;
-  patientId: string;
+  id: string | number;
+  patientId: string | number;
   patientName: string;
   referringDentist: string;
   referredTo: string;
@@ -95,13 +96,13 @@ export type Referral = {
 };
 
 export type PhotoUpload = {
-  id: string;
-  patientId: string;
+  id: string | number;
+  patientId: string | number;
   type: 'before' | 'after' | 'xray';
   url: string;
   date: string;
   notes?: string;
-  treatmentId?: string;
+  treatmentId?: string | number;
 };
 
 export type ChatMessage = {
@@ -139,14 +140,7 @@ export default function App() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [treatmentRecords, setTreatmentRecords] = useState<TreatmentRecord[]>(() => {
-    try {
-      const saved = localStorage.getItem('treatmentRecords');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [treatmentRecords, setTreatmentRecords] = useState<TreatmentRecord[]>([]);
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [photos, setPhotos] = useState<PhotoUpload[]>(() => {
     try {
@@ -156,27 +150,23 @@ export default function App() {
       return [];
     }
   });
-  const [payments, setPayments] = useState<Payment[]>(() => {
-    try {
-      const saved = localStorage.getItem('payments');
-      const result = saved ? JSON.parse(saved) : [];
-      console.log('Payments loaded from localStorage:', result);
-      return result;
-    } catch {
-      return [];
-    }
-  });
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [servicePrices, setServicePrices] = useState<ServicePrice[]>([]);
 
   // Initialize data sync hook for real-time synchronization
-  const { refreshAll, refreshPatients, refreshAppointments, refreshInventory, refreshReferrals } = useDataSync({
+  const { 
+    refreshAll, refreshPatients, refreshAppointments, refreshInventory, 
+    refreshReferrals, refreshTreatmentRecords, refreshPayments 
+  } = useDataSync({
     setPatients,
     setAppointments,
     setTreatmentRecords,
     setInventory,
     setReferrals,
+    setPayments,
+    setAnnouncements,
   });
 
   // Load data on mount and when user logs in
@@ -189,7 +179,7 @@ export default function App() {
         const userData = JSON.parse(user);
         setCurrentUser(userData);
         // Load data after user is set
-        loadAllData();
+        refreshAll();
       } catch (error) {
         console.error('Failed to load user session:', error);
         localStorage.removeItem('token');
@@ -198,68 +188,12 @@ export default function App() {
     }
   }, []);
 
-  const loadAllData = async () => {
-    try {
-      const [patientsData, appointmentsData, inventoryData, referralsData, announcementsData] = await Promise.all([
-        patientAPI.getAll().catch(err => {
-          console.warn('Failed to load patients:', err.message);
-          return [];
-        }),
-        appointmentAPI.getAll().catch(err => {
-          console.warn('Failed to load appointments:', err.message);
-          return [];
-        }),
-        inventoryAPI.getAll().catch(err => {
-          console.warn('Failed to load inventory:', err.message);
-          return [];
-        }),
-        referralAPI.getAll().catch(err => {
-          console.warn('Failed to load referrals:', err.message);
-          return [];
-        }),
-        announcementAPI.getAll().catch(err => {
-          console.warn('Failed to load announcements:', err.message);
-          return [];
-        }),
-      ]);
-      
-      console.log('API Response - Patients:', { patientsData, length: patientsData?.length });
-      console.log('API Response - Appointments:', { appointmentsData, length: appointmentsData?.length });
-      console.log('API Response - Inventory:', { inventoryData, length: inventoryData?.length });
-      
-      setPatients(patientsData || []);
-      setAppointments(appointmentsData || []);
-      setReferrals(referralsData || []);
-      setAnnouncements(announcementsData || []);
-      
-      // Convert numeric strings to numbers for inventory items
-      const convertedInventory = (inventoryData || []).map(item => ({
-        ...item,
-        quantity: typeof item.quantity === 'string' ? parseInt(item.quantity) : item.quantity,
-        minQuantity: typeof item.minQuantity === 'string' ? parseInt(item.minQuantity) : item.minQuantity,
-        cost: typeof item.cost === 'string' ? parseFloat(item.cost) : item.cost,
-      }));
-      setInventory(convertedInventory);
-    } catch (error) {
-      console.error('Failed to load data:', error);
-    }
-  };
 
-  // Persist treatment records to localStorage
-  useEffect(() => {
-    localStorage.setItem('treatmentRecords', JSON.stringify(treatmentRecords));
-  }, [treatmentRecords]);
 
   // Persist photos to localStorage
   useEffect(() => {
     localStorage.setItem('photos', JSON.stringify(photos));
   }, [photos]);
-
-  // Persist payments to localStorage
-  useEffect(() => {
-    localStorage.setItem('payments', JSON.stringify(payments));
-    console.log('Payments saved to localStorage:', payments);
-  }, [payments]);
 
   const handleLogout = () => {
     setCurrentUser(null);
@@ -285,7 +219,7 @@ export default function App() {
         
         // Set user and load data
         setCurrentUser(userData);
-        await loadAllData();
+        await refreshAll();
         toast.success(`Welcome, ${userData.fullName}`);
       } else {
         toast.error(response.error || 'Login failed');
@@ -432,7 +366,7 @@ export default function App() {
     console.log('App.tsx - Current User PatientId:', currentUser.patientId);
     console.log('App.tsx - All Treatment Records:', treatmentRecords);
     console.log('App.tsx - Filtered Patient Treatments:', patientTreatments);
-    const billingBalance = patientTreatments.reduce((sum, treatment) => sum + (treatment.remainingBalance || treatment.cost || 0), 0);
+    const billingBalance = patientTreatments.reduce((sum, treatment) => sum + (treatment.remainingBalance !== undefined ? Number(treatment.remainingBalance) : Number(treatment.cost || 0)), 0);
 
     return (
       <>
@@ -442,13 +376,14 @@ export default function App() {
           setAppointments={setAppointments}
           treatmentRecords={patientTreatments}
           onUpdatePatient={(updatedPatient) => {
-            setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+            setPatients(patients.map(p => String(p.id) === String(updatedPatient.id) ? updatedPatient : p));
           }}
           billingBalance={billingBalance}
           photos={photos}
           setPhotos={setPhotos}
           announcements={announcements}
           servicePrices={servicePrices}
+          payments={payments}
           currentUserId={currentUser.id}
           onLogout={handleLogout}
           onDataChanged={refreshAll}

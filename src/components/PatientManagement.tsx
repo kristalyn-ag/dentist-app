@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Patient, TreatmentRecord, PhotoUpload } from '../App';
-import { Search, Plus, X, Edit, Eye, Calendar, FileText, Camera, Trash2 } from 'lucide-react';
+import { Patient, TreatmentRecord, PhotoUpload, Payment } from '../App';
+import { Search, Plus, X, Edit, Eye, Calendar, FileText, Camera, Trash2, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
-import { patientAPI } from '../api';
+import { patientAPI, treatmentRecordAPI, paymentAPI } from '../api';
 import { handlePhoneInput, formatPhoneNumber, validatePhoneNumber } from '../utils/phoneValidation';
 
 type PatientManagementProps = {
@@ -11,10 +11,11 @@ type PatientManagementProps = {
   treatmentRecords: TreatmentRecord[];
   setTreatmentRecords: (records: TreatmentRecord[]) => void;
   photos: PhotoUpload[];
+  payments: Payment[];
   onDataChanged?: () => Promise<void>;
 };
 
-export function PatientManagement({ patients, setPatients, treatmentRecords, setTreatmentRecords, photos, onDataChanged }: PatientManagementProps) {
+export function PatientManagement({ patients, setPatients, treatmentRecords, setTreatmentRecords, photos, payments, onDataChanged }: PatientManagementProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -23,6 +24,8 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoUpload | null>(null);
   const [deletingPatient, setDeletingPatient] = useState<Patient | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [paymentModal, setPaymentModal] = useState<{show: boolean, record: TreatmentRecord | null}>({show: false, record: null});
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
 
   const filteredPatients = patients.filter(patient =>
     patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -81,9 +84,9 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
       };
       
       await patientAPI.update(updatedPatient.id, updatedPatient);
-      setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+      setPatients(patients.map(p => String(p.id) === String(updatedPatient.id) ? updatedPatient : p));
       setEditingPatient(null);
-      if (selectedPatient?.id === updatedPatient.id) {
+      if (selectedPatient && String(selectedPatient.id) === String(updatedPatient.id)) {
         setSelectedPatient(updatedPatient);
       }
       toast.success('Patient updated successfully!');
@@ -99,28 +102,114 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
     }
   };
 
-  const handleAddTreatment = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddTreatment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedPatient) return;
 
-    const formData = new FormData(e.currentTarget);
-    const newRecord: TreatmentRecord = {
-      id: Date.now().toString(),
-      patientId: selectedPatient.id,
-      date: formData.get('date') as string,
-      treatment: formData.get('treatment') as string,
-      tooth: formData.get('tooth') as string || undefined,
-      notes: formData.get('notes') as string,
-      cost: parseFloat(formData.get('cost') as string),
-      dentist: formData.get('dentist') as string,
-    };
+    setIsLoading(true);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const cost = parseFloat(formData.get('cost') as string);
+      const initialPayment = parseFloat(formData.get('initialPayment') as string) || 0;
+      const dentist = formData.get('dentist') as string;
+      const patientId = selectedPatient.id.toString();
 
-    setTreatmentRecords([...treatmentRecords, newRecord]);
-    e.currentTarget.reset();
+      const newRecord = {
+        patientId,
+        date: formData.get('date') as string,
+        treatment: formData.get('treatment') as string,
+        description: formData.get('treatment') as string,
+        tooth: formData.get('tooth') as string || undefined,
+        notes: formData.get('notes') as string,
+        cost,
+        dentist,
+        paymentType: initialPayment >= cost ? 'full' : (initialPayment > 0 ? 'installment' : 'full'),
+        amountPaid: initialPayment,
+        remainingBalance: cost - initialPayment,
+      };
+
+      const createdRecord = await treatmentRecordAPI.create(newRecord);
+      
+      // If there's an initial payment, create a payment record too
+      if (initialPayment > 0) {
+        await paymentAPI.create({
+          patientId,
+          treatmentRecordId: createdRecord.id,
+          amount: initialPayment,
+          paymentDate: newRecord.date,
+          paymentMethod: 'cash',
+          status: 'paid',
+          notes: `Initial payment for ${newRecord.treatment}`,
+          recordedBy: dentist
+        });
+      }
+
+      toast.success('Treatment record added successfully');
+      e.currentTarget.reset();
+      
+      if (onDataChanged) {
+        await onDataChanged();
+      }
+    } catch (error) {
+      console.error('Failed to add treatment:', error);
+      toast.error('Failed to add treatment record');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleProcessPayment = async () => {
+    if (!paymentModal.record || paymentAmount <= 0) return;
+
+    setIsLoading(true);
+    try {
+      await paymentAPI.create({
+        patientId: paymentModal.record.patientId,
+        treatmentRecordId: paymentModal.record.id,
+        amount: paymentAmount,
+        paymentDate: new Date().toISOString().split('T')[0],
+        paymentMethod: 'cash',
+        status: 'paid',
+        notes: `Balance payment for ${paymentModal.record.treatment}`,
+        recordedBy: paymentModal.record.dentist || 'System'
+      });
+
+      toast.success('Payment recorded successfully');
+      setPaymentModal({show: false, record: null});
+      setPaymentAmount(0);
+      
+      if (onDataChanged) {
+        await onDataChanged();
+      }
+    } catch (error) {
+      console.error('Failed to process payment:', error);
+      toast.error('Failed to process payment');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string | number) => {
+    if (!window.confirm('Are you sure you want to delete this payment record? This will update the balance.')) return;
+
+    setIsLoading(true);
+    try {
+      await paymentAPI.delete(paymentId);
+      toast.success('Payment deleted successfully');
+      
+      if (onDataChanged) {
+        await onDataChanged();
+      }
+    } catch (error) {
+      console.error('Failed to delete payment:', error);
+      toast.error('Failed to delete payment');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const patientRecords = selectedPatient
-    ? treatmentRecords.filter(r => r.patientId === selectedPatient.id)
+    ? treatmentRecords.filter(r => String(r.patientId) === String(selectedPatient.id))
     : [];
 
   const calculateAge = (dob: string) => {
@@ -146,16 +235,16 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
       await patientAPI.delete(deletingPatient.id);
       
       // Remove patient from patients list
-      setPatients(patients.filter(p => p.id !== deletingPatient.id));
+      setPatients(patients.filter(p => String(p.id) !== String(deletingPatient.id)));
       
       // Also remove related treatment records
-      setTreatmentRecords(treatmentRecords.filter(r => r.patientId !== deletingPatient.id));
+      setTreatmentRecords(treatmentRecords.filter(r => String(r.patientId) !== String(deletingPatient.id)));
       
       toast.success(`Patient ${deletingPatient.name} has been deleted`);
       setDeletingPatient(null);
       
       // If we're viewing the deleted patient, go back to list
-      if (selectedPatient?.id === deletingPatient.id) {
+      if (selectedPatient && String(selectedPatient.id) === String(deletingPatient.id)) {
         setViewMode('list');
         setSelectedPatient(null);
       }
@@ -269,15 +358,15 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-sm">Total Billed:</span>
-                        <span className="font-semibold">₱{patientRecords.reduce((sum, r) => sum + r.cost, 0)}</span>
+                        <span className="font-semibold">₱{patientRecords.reduce((sum, r) => sum + Number(r.cost || 0), 0).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm">Total Paid:</span>
-                        <span className="font-semibold text-green-600">₱{patientRecords.reduce((sum, r) => sum + (r.amountPaid || 0), 0)}</span>
+                        <span className="font-semibold text-green-600">₱{patientRecords.reduce((sum, r) => sum + Number(r.amountPaid || 0), 0).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between bg-orange-50 p-2 rounded">
                         <span className="text-sm font-medium">Remaining Balance:</span>
-                        <span className="font-bold text-orange-600">₱{patientRecords.reduce((sum, r) => sum + r.cost, 0) - patientRecords.reduce((sum, r) => sum + (r.amountPaid || 0), 0)}</span>
+                        <span className="font-bold text-orange-600">₱{(selectedPatient.totalBalance !== undefined ? Number(selectedPatient.totalBalance) : (patientRecords.reduce((sum, r) => sum + Number(r.cost || 0), 0) - patientRecords.reduce((sum, r) => sum + Number(r.amountPaid || 0), 0))).toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
@@ -318,7 +407,19 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
                           <span className="text-green-600 font-semibold">Paid: ₱{record.amountPaid}</span>
                         )}
                         {record.remainingBalance !== undefined && record.remainingBalance > 0 && (
-                          <span className="text-orange-600 font-semibold">Balance: ₱{record.remainingBalance}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-orange-600 font-semibold">Balance: ₱{record.remainingBalance}</span>
+                            <button
+                              onClick={() => {
+                                setPaymentModal({show: true, record: record});
+                                setPaymentAmount(record.remainingBalance || 0);
+                              }}
+                              className="ml-2 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 flex items-center gap-1"
+                            >
+                              <CreditCard className="w-3 h-3" />
+                              Pay
+                            </button>
+                          </div>
                         )}
                         {record.remainingBalance === 0 && (
                           <span className="text-green-600 font-semibold">✓ Fully Paid</span>
@@ -327,6 +428,37 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
                       {record.paymentType === 'installment' && record.installmentPlan && (
                         <div className="mt-2 text-xs text-gray-600">
                           <p>Installments: {record.installmentPlan.installments} x ₱{record.installmentPlan.amountPerInstallment}</p>
+                        </div>
+                      )}
+
+                      {/* Payment History for this record */}
+                      {payments.filter(p => String(p.treatmentRecordId) === String(record.id)).length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Payment History</p>
+                          <div className="space-y-1.5">
+                            {payments
+                              .filter(p => String(p.treatmentRecordId) === String(record.id))
+                              .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
+                              .map(payment => (
+                                <div key={payment.id} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-gray-100 group">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-600">{new Date(payment.paymentDate).toLocaleDateString()}</span>
+                                    <span className="text-gray-400">|</span>
+                                    <span className="text-gray-500 italic">By {payment.recordedBy}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-bold text-green-600">₱{payment.amount}</span>
+                                    <button
+                                      onClick={() => handleDeletePayment(payment.id)}
+                                      className="text-gray-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
+                                      title="Delete payment"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -346,7 +478,7 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
             Treatment Photos & X-Rays
           </h2>
           <div className="grid grid-cols-4 gap-4">
-            {photos.filter(p => p.patientId === selectedPatient.id).map(photo => (
+            {photos.filter(p => String(p.patientId) === String(selectedPatient.id)).map(photo => (
               <div
                 key={photo.id}
                 className="relative group cursor-pointer"
@@ -368,7 +500,7 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
                 </div>
               </div>
             ))}
-            {photos.filter(p => p.patientId === selectedPatient.id).length === 0 && (
+            {photos.filter(p => String(p.patientId) === String(selectedPatient.id)).length === 0 && (
               <div className="col-span-4 text-center py-8 text-gray-500">
                 <Camera className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                 <p className="text-sm">No photos uploaded yet</p>
@@ -449,6 +581,16 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
                 type="number"
                 name="cost"
                 required
+                step="0.01"
+                placeholder="0.00"
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Initial Payment (₱) - Optional</label>
+              <input
+                type="number"
+                name="initialPayment"
                 step="0.01"
                 placeholder="0.00"
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -825,6 +967,57 @@ export function PatientManagement({ patients, setPatients, treatmentRecords, set
                 className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700"
               >
                 Delete Patient
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {paymentModal.show && paymentModal.record && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl">Record Payment</h2>
+              <button onClick={() => setPaymentModal({show: false, record: null})} className="text-gray-500 hover:text-gray-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600">Treatment</p>
+                <p className="font-semibold">{paymentModal.record.treatment}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Remaining Balance</p>
+                <p className="font-semibold text-orange-600">₱{paymentModal.record.remainingBalance}</p>
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Payment Amount (₱)</label>
+                <input
+                  type="number"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value))}
+                  max={paymentModal.record.remainingBalance}
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                type="button"
+                onClick={() => setPaymentModal({show: false, record: null})}
+                className="px-6 py-2 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleProcessPayment}
+                disabled={isLoading || paymentAmount <= 0}
+                className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+              >
+                {isLoading ? 'Processing...' : 'Confirm Payment'}
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Patient, Appointment, TreatmentRecord, PhotoUpload, Announcement, ServicePrice } from '../App';
-import { Calendar, FileText, User as UserIcon, Clock, Image, X, Upload, Edit, Save, XCircle, Info, CheckCircle, AlertCircle, Camera, Sparkles, Heart, Smile, Shield, Megaphone, Send, Plus, CreditCard, Settings, Check, Eye, EyeOff, Menu, LogOut } from 'lucide-react';
+import { Patient, Appointment, TreatmentRecord, PhotoUpload, Announcement, ServicePrice, Payment } from '../App';
+import { Calendar, FileText, User as UserIcon, Clock, Image, X, Upload, Edit, Save, XCircle, Info, CheckCircle, AlertCircle, Camera, Sparkles, Heart, Smile, Shield, Megaphone, Send, Plus, CreditCard, Settings, Check, Eye, EyeOff, Menu, LogOut, History } from 'lucide-react';
 import { PesoSign } from './icons/PesoSign';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -18,6 +18,7 @@ type PatientPortalProps = {
   setPhotos: (photos: PhotoUpload[]) => void;
   announcements: Announcement[];
   servicePrices: ServicePrice[];
+  payments: Payment[];
   currentUserId: string;
   onLogout?: () => void;
   onDataChanged?: () => Promise<void>;
@@ -25,7 +26,7 @@ type PatientPortalProps = {
 
 const API_BASE = 'http://localhost:5000/api';
 
-export function PatientPortal({ patient, appointments, setAppointments, treatmentRecords, onUpdatePatient, billingBalance = 5000, photos, setPhotos, announcements, servicePrices, currentUserId, onLogout, onDataChanged }: PatientPortalProps) {
+export function PatientPortal({ patient, appointments, setAppointments, treatmentRecords, onUpdatePatient, billingBalance = 5000, photos, setPhotos, announcements, servicePrices, payments, currentUserId, onLogout, onDataChanged }: PatientPortalProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'appointments' | 'records' | 'photos' | 'balance' | 'care-guide' | 'announcements' | 'services'>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [editedPatient, setEditedPatient] = useState<Patient>(patient);
@@ -171,10 +172,10 @@ export function PatientPortal({ patient, appointments, setAppointments, treatmen
     setUsernameCheckTimeout(timeout);
   };
 
-  const patientAppointments = appointments.filter(apt => apt.patientId === patient.id);
+  const patientAppointments = appointments.filter(apt => String(apt.patientId) === String(patient.id));
   // treatmentRecords are already filtered in App.tsx for this patient, so use directly
   const patientRecords = treatmentRecords;
-  const patientPhotos = photos.filter(photo => photo.patientId === patient.id);
+  const patientPhotos = photos.filter(photo => String(photo.patientId) === String(patient.id));
 
   const menuItems = [
     { id: 'profile', label: 'My Profile', icon: UserIcon, color: 'from-blue-500 to-blue-600' },
@@ -206,9 +207,9 @@ export function PatientPortal({ patient, appointments, setAppointments, treatmen
     return age;
   };
 
-  const totalSpent = patientRecords.reduce((sum, record) => sum + record.cost, 0);
-  const totalPaid = patientRecords.reduce((sum, record) => sum + (record.amountPaid || 0), 0);
-  const currentBalance = totalSpent - totalPaid;
+  const totalSpent = patientRecords.reduce((sum, record) => sum + Number(record.cost || 0), 0);
+  const totalPaid = patientRecords.reduce((sum, record) => sum + Number(record.amountPaid || 0), 0);
+  const currentBalance = patient.totalBalance !== undefined ? Number(patient.totalBalance) : (totalSpent - totalPaid);
 
   // Debug logging
   useEffect(() => {
@@ -825,7 +826,7 @@ export function PatientPortal({ patient, appointments, setAppointments, treatmen
                   <div className="flex justify-between items-center mb-4">
                     <div>
                       <p className="text-sm text-gray-600 mb-1">Current Balance</p>
-                      <p className="text-4xl text-red-600">₱{currentBalance}</p>
+                      <p className="text-4xl text-red-600">₱{currentBalance.toLocaleString()}</p>
                     </div>
                     <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
                       <CreditCard className="w-8 h-8 text-red-600" />
@@ -846,19 +847,56 @@ export function PatientPortal({ patient, appointments, setAppointments, treatmen
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-purple-200">
                     <p className="text-sm text-gray-600 mb-1">Total Billed</p>
-                    <p className="text-2xl">₱{totalSpent}</p>
+                    <p className="text-2xl">₱{totalSpent.toLocaleString()}</p>
                   </div>
                   <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
                     <p className="text-sm text-gray-600 mb-1">Total Paid</p>
-                    <p className="text-2xl text-green-600">₱{totalPaid}</p>
+                    <p className="text-2xl text-green-600">₱{totalPaid.toLocaleString()}</p>
                   </div>
                 </div>
 
-                {/* Recent Transactions */}
+                {/* Payment History */}
                 <div>
-                  <h3 className="font-semibold mb-3">Recent Transactions</h3>
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    <History className="w-4 h-4 text-blue-600" />
+                    Recent Payments
+                  </h3>
                   <div className="space-y-2">
-                    {patientRecords.slice(-5).reverse().map(record => (
+                    {payments
+                      .filter(p => String(p.patientId) === String(patient.id))
+                      .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime())
+                      .slice(0, 10)
+                      .map(payment => (
+                        <div key={payment.id} className="p-4 bg-white rounded-lg border border-gray-100 flex justify-between items-center shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center">
+                              <CheckCircle className="w-5 h-5 text-green-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">Payment Received</p>
+                              <p className="text-xs text-gray-500">{new Date(payment.paymentDate).toLocaleDateString()}</p>
+                              {payment.notes && <p className="text-xs text-gray-400 mt-0.5">{payment.notes}</p>}
+                            </div>
+                          </div>
+                          <p className="text-lg font-bold text-green-600">₱{payment.amount}</p>
+                        </div>
+                      ))}
+                    {payments.filter(p => String(p.patientId) === String(patient.id)).length === 0 && (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                        <p className="text-gray-500">No payment records found.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Treatment Charges */}
+                <div>
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-purple-600" />
+                    Treatment Charges
+                  </h3>
+                  <div className="space-y-2">
+                    {patientRecords.slice().reverse().map(record => (
                       <div key={record.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
                         <div>
                           <p className="font-medium">{record.treatment}</p>
