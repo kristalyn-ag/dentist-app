@@ -272,6 +272,12 @@ export function AssistantDashboard({
 
   const menuItems = [
     {
+      id: "patients",
+      label: "Patients",
+      icon: Users,
+      color: "from-blue-500 to-blue-600",
+    },
+    {
       id: "appointments",
       label: "Appointments",
       icon: Calendar,
@@ -525,6 +531,7 @@ export function AssistantDashboard({
                   treatmentRecords={treatmentRecords}
                   setTreatmentRecords={setTreatmentRecords}
                   photos={photos}
+                  payments={payments}
                   onDataChanged={onDataChanged}
                 />
               )}
@@ -638,7 +645,7 @@ export function AssistantDashboard({
                       <h3 className="text-lg font-semibold text-slate-800 mb-4">Recent Patient Photos</h3>
                       <div className="space-y-3">
                         {photos.slice(-10).reverse().map(photo => {
-                          const patient = patients.find(p => p.id === photo.patientId);
+                          const patient = patients.find(p => String(p.id) === String(photo.patientId));
                           return (
                             <div key={photo.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-start">
                               <div>

@@ -17,27 +17,27 @@ export function PatientChat({ patients, chatMessages, setChatMessages, currentUs
 
   // Get unique patients who have chat history
   const patientsWithChats = patients.filter(patient =>
-    chatMessages.some(msg => msg.patientId === patient.id)
+    chatMessages.some(msg => String(msg.patientId) === String(patient.id))
   );
 
   // Add patients without chats to the list
   const allChatPatients = [
     ...patientsWithChats,
-    ...patients.filter(p => !patientsWithChats.find(pc => pc.id === p.id))
+    ...patients.filter(p => !patientsWithChats.find(pc => String(pc.id) === String(p.id)))
   ];
 
-  const selectedPatient = allChatPatients.find(p => p.id === selectedPatientId);
+  const selectedPatient = allChatPatients.find(p => String(p.id) === String(selectedPatientId));
 
   const selectedPatientMessages = selectedPatientId
     ? chatMessages
-        .filter(msg => msg.patientId === selectedPatientId)
+        .filter(msg => String(msg.patientId) === String(selectedPatientId))
         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     : [];
 
   // Get unread count for each patient
   const getUnreadCount = (patientId: string) => {
     return chatMessages.filter(
-      msg => msg.patientId === patientId && !msg.read && msg.senderRole === 'patient'
+      msg => String(msg.patientId) === String(patientId) && !msg.read && msg.senderRole === 'patient'
     ).length;
   };
 
@@ -45,7 +45,7 @@ export function PatientChat({ patients, chatMessages, setChatMessages, currentUs
   const markAsRead = (patientId: string) => {
     setChatMessages(
       chatMessages.map(msg =>
-        msg.patientId === patientId && msg.senderRole === 'patient'
+        String(msg.patientId) === String(patientId) && msg.senderRole === 'patient'
           ? { ...msg, read: true }
           : msg
       )
@@ -108,7 +108,7 @@ export function PatientChat({ patients, chatMessages, setChatMessages, currentUs
             {allChatPatients.map(patient => {
               const unreadCount = getUnreadCount(patient.id);
               const lastMessage = chatMessages
-                .filter(msg => msg.patientId === patient.id)
+                .filter(msg => String(msg.patientId) === String(patient.id))
                 .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
 
               return (

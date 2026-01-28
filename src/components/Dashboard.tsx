@@ -16,7 +16,7 @@ export function Dashboard({ patients, appointments, inventory, treatmentRecords,
   const todayAppointments = appointments.filter(apt => apt.date === new Date().toISOString().split('T')[0]);
   const lowStockItems = inventory.filter(item => item.quantity <= item.minQuantity);
   
-  const totalRevenue = treatmentRecords.reduce((sum, record) => sum + record.cost, 0);
+  const totalRevenue = treatmentRecords.reduce((sum, record) => sum + Number(record.amountPaid || 0), 0);
 
   // Generate appointment data from real appointments
   const appointmentData = appointments.length > 0 ? [

@@ -380,6 +380,7 @@ export function DoctorDashboard({
                   treatmentRecords={treatmentRecords}
                   setTreatmentRecords={setTreatmentRecords}
                   photos={photos}
+                  payments={payments}
                   onDataChanged={onDataChanged}
                 />
               )}

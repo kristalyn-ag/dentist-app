@@ -57,12 +57,12 @@ export function AppointmentScheduler({ appointments, setAppointments, patients, 
 
   const updateAppointmentStatus = async (id: string | number, status: 'scheduled' | 'completed' | 'cancelled') => {
     try {
-      const appointment = appointments.find(apt => apt.id === id);
+      const appointment = appointments.find(apt => String(apt.id) === String(id));
       if (!appointment) return;
 
       await appointmentAPI.update(id, { ...appointment, status });
       setAppointments(appointments.map(apt => 
-        apt.id === id ? { ...apt, status } : apt
+        String(apt.id) === String(id) ? { ...apt, status } : apt
       ));
       toast.success('Appointment updated successfully!');
       // Sync data across all users
@@ -92,7 +92,7 @@ export function AppointmentScheduler({ appointments, setAppointments, patients, 
   const deleteAppointment = async (id: string | number) => {
     try {
       await appointmentAPI.delete(id);
-      setAppointments(appointments.filter(apt => apt.id !== id));
+      setAppointments(appointments.filter(apt => String(apt.id) !== String(id)));
       toast.success('Appointment deleted successfully!');
       // Sync data across all users
       if (onDataChanged) {

@@ -39,6 +39,7 @@ router.get('/', authMiddleware, async (req, res) => {
     `);
     res.json(employees);
   } catch (error) {
+    console.error('Error fetching employees:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -66,6 +67,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 // Add employee (without user account initially)
 router.post('/', authMiddleware, async (req, res) => {
   try {
+    console.log('Adding new employee:', req.body);
     const { name, position, phone, email, address, dateHired } = req.body;
     
     const [result] = await pool.query(
@@ -73,11 +75,13 @@ router.post('/', authMiddleware, async (req, res) => {
       [name, position, phone, email, address, dateHired]
     );
     
+    console.log('Employee added successfully with ID:', result.insertId);
     res.status(201).json({ 
       message: 'Employee added successfully',
       employeeId: result.insertId
     });
   } catch (error) {
+    console.error('Error adding employee:', error);
     res.status(500).json({ error: error.message });
   }
 });

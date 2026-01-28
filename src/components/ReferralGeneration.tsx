@@ -75,7 +75,7 @@ export function ReferralGeneration({ referrals, setReferrals, patients }: Referr
     if (confirm('Are you sure you want to delete this referral?')) {
       try {
         await referralAPI.delete(id);
-        setReferrals(referrals.filter(r => r.id !== id));
+        setReferrals(referrals.filter(r => String(r.id) !== String(id)));
         toast.success('Referral deleted successfully');
       } catch (error) {
         console.error('Failed to delete referral:', error);
@@ -85,7 +85,7 @@ export function ReferralGeneration({ referrals, setReferrals, patients }: Referr
   };
 
   const downloadReferral = (referral: Referral) => {
-    const patient = patients.find(p => p.id === referral.patientId);
+    const patient = patients.find(p => String(p.id) === String(referral.patientId));
     
     const content = `
 DENTAL REFERRAL
@@ -379,19 +379,19 @@ Generated on: ${new Date().toLocaleString()}
                     <p className="text-sm text-gray-600 mb-1">Name</p>
                     <p>{viewingReferral.patientName}</p>
                   </div>
-                  {patients.find(p => p.id === viewingReferral.patientId) && (
+                  {patients.find(p => String(p.id) === String(viewingReferral.patientId)) && (
                     <>
                       <div>
                         <p className="text-sm text-gray-600 mb-1">Date of Birth</p>
-                        <p>{new Date(patients.find(p => p.id === viewingReferral.patientId)!.dateOfBirth).toLocaleDateString()}</p>
+                        <p>{new Date(patients.find(p => String(p.id) === String(viewingReferral.patientId))!.dateOfBirth).toLocaleDateString()}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-600 mb-1">Phone</p>
-                        <p>{patients.find(p => p.id === viewingReferral.patientId)!.phone}</p>
+                        <p>{patients.find(p => String(p.id) === String(viewingReferral.patientId))!.phone}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-600 mb-1">Email</p>
-                        <p>{patients.find(p => p.id === viewingReferral.patientId)!.email}</p>
+                        <p>{patients.find(p => String(p.id) === String(viewingReferral.patientId))!.email}</p>
                       </div>
                     </>
                   )}
@@ -427,18 +427,18 @@ Generated on: ${new Date().toLocaleString()}
                 <p className="text-gray-700 whitespace-pre-wrap">{viewingReferral.reason}</p>
               </div>
 
-              {patients.find(p => p.id === viewingReferral.patientId) && (
+              {patients.find(p => String(p.id) === String(viewingReferral.patientId)) && (
                 <div className="pt-4 border-t border-gray-200">
                   <h3 className="mb-3">Patient Medical Information</h3>
                   <div className="space-y-3">
                     <div>
                       <p className="text-sm text-gray-600 mb-1">Medical History</p>
-                      <p>{patients.find(p => p.id === viewingReferral.patientId)!.medicalHistory || 'None reported'}</p>
+                      <p>{patients.find(p => String(p.id) === String(viewingReferral.patientId))!.medicalHistory || 'None reported'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600 mb-1">Allergies</p>
-                      <p className={patients.find(p => p.id === viewingReferral.patientId)!.allergies !== 'None' ? 'text-red-600' : ''}>
-                        {patients.find(p => p.id === viewingReferral.patientId)!.allergies || 'None reported'}
+                      <p className={patients.find(p => String(p.id) === String(viewingReferral.patientId))!.allergies !== 'None' ? 'text-red-600' : ''}>
+                        {patients.find(p => String(p.id) === String(viewingReferral.patientId))!.allergies || 'None reported'}
                       </p>
                     </div>
                   </div>

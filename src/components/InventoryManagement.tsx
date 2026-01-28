@@ -157,7 +157,7 @@ export function InventoryManagement({ inventory, setInventory, onDataChanged }: 
   });
 
   const lowStockCount = inventory.filter(item => item.quantity <= item.minQuantity).length;
-  const totalValue = inventory.reduce((sum, item) => sum + (item.quantity * item.cost), 0);
+  const totalValue = inventory.reduce((sum, item) => sum + (item.quantity * Number(item.cost || 0)), 0);
 
   return (
     <div className="p-8">
@@ -204,7 +204,7 @@ export function InventoryManagement({ inventory, setInventory, onDataChanged }: 
             </div>
           </div>
           <p className="text-gray-600 text-sm mb-1">Total Inventory Value</p>
-          <p className="text-3xl">₱{totalValue.toFixed(2)}</p>
+          <p className="text-3xl">₱{totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </div>
       </div>
 
@@ -305,8 +305,8 @@ export function InventoryManagement({ inventory, setInventory, onDataChanged }: 
                     </td>
                     <td className="px-6 py-4">{item.minQuantity} {item.unit}</td>
                     <td className="px-6 py-4 text-sm">{item.supplier}</td>
-                    <td className="px-6 py-4">₱{item.cost.toFixed(2)}</td>
-                    <td className="px-6 py-4">₱{(item.quantity * item.cost).toFixed(2)}</td>
+                    <td className="px-6 py-4">₱{Number(item.cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-6 py-4">₱{(item.quantity * Number(item.cost || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
                         <button
